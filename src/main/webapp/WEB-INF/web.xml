@@ -3,45 +3,48 @@
 	xmlns="http://xmlns.jcp.org/xml/ns/javaee"
 	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_3_1.xsd"
 	version="3.1">
+
 	<welcome-file-list>
 		<welcome-file>index.html</welcome-file>
 	</welcome-file-list>
+
 	<servlet>
-		<servlet-name>rootApp</servlet-name>
-		<servlet-class>tofer17.ags.RootApp</servlet-class>
-	</servlet>
-	<servlet>
-		<servlet-name>commsApp</servlet-name>
-		<servlet-class>tofer17.ags.Comms</servlet-class>
+		<description></description>
+		<display-name>TimeBasedEncrypter</display-name>
+		<servlet-name>TimeBasedEncrypter</servlet-name>
+		<servlet-class>tofer17.ags.TimeBasedEncrypter</servlet-class>
 		<load-on-startup>1</load-on-startup>
+	</servlet>
+
+	<servlet>
+		<description></description>
+		<display-name>Comms</display-name>
+		<servlet-name>Comms</servlet-name>
+		<servlet-class>tofer17.ags.Comms</servlet-class>
+		<load-on-startup>2</load-on-startup>
 		<async-supported>true</async-supported>
 	</servlet>
-	<servlet-mapping>
-		<servlet-name>rootApp</servlet-name>
-		<url-pattern>/app</url-pattern>
-	</servlet-mapping>
-	<servlet-mapping>
-		<servlet-name>commsApp</servlet-name>
-		<url-pattern>/com</url-pattern>
-	</servlet-mapping>
+
 	<servlet>
 		<description></description>
 		<display-name>RootApp</display-name>
 		<servlet-name>RootApp</servlet-name>
 		<servlet-class>tofer17.ags.RootApp</servlet-class>
 	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>TimeBasedEncrypter</servlet-name>
+		<url-pattern>/tbe</url-pattern>
+	</servlet-mapping>
+
+	<servlet-mapping>
+		<servlet-name>Comms</servlet-name>
+		<url-pattern>/com</url-pattern>
+	</servlet-mapping>
+
 	<servlet-mapping>
 		<servlet-name>RootApp</servlet-name>
-		<url-pattern>/RootApp</url-pattern>
+		<url-pattern>/app</url-pattern>
 	</servlet-mapping>
-	<servlet>
-		<description></description>
-		<display-name>Comms</display-name>
-		<servlet-name>Comms</servlet-name>
-		<servlet-class>tofer17.ags.Comms</servlet-class>
-	</servlet>
-	<servlet-mapping>
-		<servlet-name>Comms</servlet-name>
-		<url-pattern>/Comms</url-pattern>
-	</servlet-mapping>
+
 </web-app>

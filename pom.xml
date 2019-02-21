@@ -33,6 +33,16 @@
 				<artifactId>jetty-maven-plugin</artifactId>
 				<version>${jetty.version}</version>
 				<configuration>
+					<systemProperties>
+						<systemProperty>
+							<name>tofer17.ags.tbe.privateKey</name>
+							<value>${project.basedir}/run/private-key.dat</value>
+						</systemProperty>
+						<systemProperty>
+							<name>tofer17.ags.tbe.publicKey</name>
+							<value>${project.basedir}/run/public-key.dat</value>
+						</systemProperty>
+					</systemProperties>
 					<scanIntervalSeconds>10</scanIntervalSeconds>
 					<modules>
 						<module>session-cache-hash</module>
