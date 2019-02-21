@@ -5,16 +5,20 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.security.Signature;
+import java.security.SignatureException;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.RSAKeyGenParameterSpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.Base64;
 
 import javax.servlet.ServletConfig;
 import javax.servlet.ServletException;
@@ -55,6 +59,10 @@ import org.slf4j.LoggerFactory;
  * 		"payload":[...],
  * 
  * }
+ * 
+ * See: https://docs.oracle.com/javase/9/security/java-cryptography-architecture-jca-reference-guide.htm#JSSEC-GUID-36893ED5-E3CA-496B-BC78-B13EE971C736
+ * 		https://stackoverflow.com/questions/1205135/how-to-encrypt-string-in-java
+ * 
  * @author cmetyko
  *
  */
@@ -66,6 +74,7 @@ public class TimeBasedEncrypter extends HttpServlet {
 	private static final Logger logger = LoggerFactory.getLogger( TimeBasedEncrypter.class );
 
 	private KeyPair keyPair = null;
+	private CharSequence pubKeyExport = null;
 	
 	public TimeBasedEncrypter () {
         super();
@@ -129,18 +138,71 @@ public class TimeBasedEncrypter extends HttpServlet {
 		return null;
 	}
 	
+	/**
+	 * t = time, s = signature, k = key
+	 * {"t":"...",
+	 * 	"s":"...",
+	 * 	"k":"..."}
+	 * 
+	 * @return
+	 */
+	private CharSequence getTimestampJSON () {
+		
+		byte[] signature = new byte[0];
+
+		final String time = "" + System.currentTimeMillis();
+
+		try {
+			final Signature sig = Signature.getInstance( "SHA256withRSA" );
+			sig.initSign( keyPair.getPrivate() );
+			sig.update( time.getBytes() );
+			signature = sig.sign();
+		} catch ( NoSuchAlgorithmException e ) {
+			e.printStackTrace();
+		} catch ( InvalidKeyException e ) {
+			e.printStackTrace();
+		} catch ( SignatureException e ) {
+			e.printStackTrace();
+		}
+		
+		return new StringBuffer( 771 )
+				.append( "{\"t\":\"" )
+				.append( time )
+				.append("\",\"s\":\"")
+				.append( Base64.getEncoder().encodeToString( signature ) )
+				.append("\",")
+				.append(pubKeyExport)
+				.append("}");		
+	}
+	
 	public void init( ServletConfig config ) throws ServletException {
 		keyPair = loadOrGenerateKeyPair( 
 				new File( System.getProperty("tofer17.ags.tbe.publicKey") ), 
 				new File( System.getProperty("tofer17.ags.tbe.privateKey") )
 				);
+
 		if ( keyPair == null ) {
 			logger.error( "FATAL: could not load or generate keys!" );
 		}
+		
+		pubKeyExport = new StringBuffer( 400 )
+				.append("\"k\":\"")
+				.append( Base64.getEncoder().encodeToString( keyPair.getPublic().getEncoded() ) )
+				.append("\"").toString();
 	}
 
+	/*
+	 * let ts = JSON.parse('{"t":"1550790704206","s":"KfnuqZtOIGFRNicoM2j3xeHi0c1XZk7GOpq+Cxw924DOkzww/yT8ft07qF5A3Y9S4BCKOAQl02/8ak1t9Xznb2+2P98VQRzNMmS4uOeQvLLaaHCZRdJDNq/lfX1hawSMEqQYO+2ycKLVMs5WaMapIQ3uUaEFug12KfhlIyJwztiq7IkdUwaphGt7Mg/O0nYXtD4SNpPMc+npRp0ir4RdmEmgfH5M4T2NYXDslwNBDqAzFc2XVvJnEqntBTDtYiXui3P0JM+BHwoROWH0tlbjf81ecGoV8sKKJZcBtTydPreI+fPcpUNSP8W5hSCcoGugYX0LS+u+qiaS1cNLBnJwFA==","k":"MIIBIDANBgkqhkiG9w0BAQEFAAOCAQ0AMIIBCAKCAQEAn7ekYQBQtUgkzY6Ymc/vc4VV6vlTzusjVHxELbD18MCTwZh6rMS2/4rlp2Xp4I2YyuoQhAkfVYAbceIuIt+IVrFoukOp6lr2pdAyV+CBNdeRz1Fx2OU+tSuF5rvGAxIQ4hqnMtazRwsSbfIBzJTIyAGsA+ve5GrSFom+PpX+MPd7MUeZ4gybY1GxeA7jd0QTxW3caCorM2vZqlmu7pdDwravOa9rrvHGwRfN37V/Uzy23udUxm49QihzsE1HLqo1tntw5Y5eJ7pgkGpT8S48aZUivyvXlPdXm08L32MBAsDxmP01aXXlJjCEvZ1kwPGy8542Yj3gG0OBv9ps+gxcfQIBAw=="}');
+	 * console.log( new Date( parseInt( ts.t ) ) );
+	 * let d = new TextEncoder().encode( ts.t );
+	 * let s = new TextEncoder().encode( atob( ts.s ) ); 
+	 * let k = new TextEncoder().encode( atob( ts.k ) );
+	 * let key = new Key(k)....
+	 * ...verify( {algo}, key, s, d )
+	 */
 	protected void doGet ( HttpServletRequest request, HttpServletResponse response ) throws ServletException, IOException {
-		response.getWriter().append( "Served at: " ).append( request.getContextPath() );
+		//response.getWriter().append( "Served at: " ).append( request.getContextPath() );
+		response.getWriter().append( getTimestampJSON() );
 	}
 
 	protected void doPost ( HttpServletRequest request, HttpServletResponse response ) throws ServletException, IOException {
