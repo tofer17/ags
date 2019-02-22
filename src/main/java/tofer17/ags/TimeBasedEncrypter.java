@@ -189,17 +189,16 @@ public class TimeBasedEncrypter extends HttpServlet {
 				.append("\"k\":\"")
 				.append( Base64.getEncoder().encodeToString( keyPair.getPublic().getEncoded() ) )
 				.append("\"").toString();
+		
+		if ( "1".equals( "2" ) ) { // for debugging, adds r:[...] as part of the pubKeyExp
+			byte[] b = keyPair.getPublic().getEncoded();
+			StringBuffer sb = new StringBuffer().append("\"r\":[");
+			for ( int i = 0; i < b.length; i++ ) sb.append(i>0?",":"").append(b[i]);
+			sb.append("],").append(pubKeyExport);
+			pubKeyExport = sb.toString();
+		}
 	}
 
-	/*
-	 * let ts = JSON.parse('{"t":"1550790704206","s":"KfnuqZtOIGFRNicoM2j3xeHi0c1XZk7GOpq+Cxw924DOkzww/yT8ft07qF5A3Y9S4BCKOAQl02/8ak1t9Xznb2+2P98VQRzNMmS4uOeQvLLaaHCZRdJDNq/lfX1hawSMEqQYO+2ycKLVMs5WaMapIQ3uUaEFug12KfhlIyJwztiq7IkdUwaphGt7Mg/O0nYXtD4SNpPMc+npRp0ir4RdmEmgfH5M4T2NYXDslwNBDqAzFc2XVvJnEqntBTDtYiXui3P0JM+BHwoROWH0tlbjf81ecGoV8sKKJZcBtTydPreI+fPcpUNSP8W5hSCcoGugYX0LS+u+qiaS1cNLBnJwFA==","k":"MIIBIDANBgkqhkiG9w0BAQEFAAOCAQ0AMIIBCAKCAQEAn7ekYQBQtUgkzY6Ymc/vc4VV6vlTzusjVHxELbD18MCTwZh6rMS2/4rlp2Xp4I2YyuoQhAkfVYAbceIuIt+IVrFoukOp6lr2pdAyV+CBNdeRz1Fx2OU+tSuF5rvGAxIQ4hqnMtazRwsSbfIBzJTIyAGsA+ve5GrSFom+PpX+MPd7MUeZ4gybY1GxeA7jd0QTxW3caCorM2vZqlmu7pdDwravOa9rrvHGwRfN37V/Uzy23udUxm49QihzsE1HLqo1tntw5Y5eJ7pgkGpT8S48aZUivyvXlPdXm08L32MBAsDxmP01aXXlJjCEvZ1kwPGy8542Yj3gG0OBv9ps+gxcfQIBAw=="}');
-	 * console.log( new Date( parseInt( ts.t ) ) );
-	 * let d = new TextEncoder().encode( ts.t );
-	 * let s = new TextEncoder().encode( atob( ts.s ) ); 
-	 * let k = new TextEncoder().encode( atob( ts.k ) );
-	 * let key = new Key(k)....
-	 * ...verify( {algo}, key, s, d )
-	 */
 	protected void doGet ( HttpServletRequest request, HttpServletResponse response ) throws ServletException, IOException {
 		//response.getWriter().append( "Served at: " ).append( request.getContextPath() );
 		response.getWriter().append( getTimestampJSON() );

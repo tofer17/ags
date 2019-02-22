@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="ISO-8859-1">
+<title>TEST : TBE</title>
+<script>
+
+var fetchAt, importAt, verifyAt;
+
+function getSignedTimestamp () {
+	fetchAt = new Date().getTime();
+	const btn = document.getElementById( "fetchbtn" );
+	btn.disabled = true;
+	btn.innerHTML = "...fetching...";
+	document.getElementById( "fetchpb" ).value = 0;
+	let req = new XMLHttpRequest();
+	req.open( "GET", "tbe");
+	req.onload = recieveSignedTimestamp;
+	req.send();
+}
+
+
+function b64toi8array ( b64 ) {
+	return Int8Array.from( Array.prototype.map.call( window.atob( b64 ), c => c.charCodeAt( 0 ) ) );
+}
+
+var ts;
+
+function debugKey ( k ) {
+	return !k?"undefined":(""+ 
+			k.constructor.name + " " +
+			k.type + " " +
+			k.algorithm.name + " " +
+			k.algorithm.hash.name + " " +
+			k.algorithm.modulusLength + " " +
+			k.usages
+			);
+}
+
+function recieveSignedTimestamp ( e ) {
+	if ( this.readyState === XMLHttpRequest.DONE && this.status === 200 ) {
+		document.getElementById( "fetchms" ).innerHTML = ( new Date().getTime() - fetchAt ) + "ms";
+		const btn = document.getElementById( "fetchbtn" );
+		btn.disabled = false;
+		btn.innerHTML = "Fetch";
+		document.getElementById( "fetchpb" ).value = 1;
+		document.getElementById( "tsr" ).value = this.response;
+		const tsr = JSON.parse( this.response );
+		
+		ts = {};
+		
+		ts.time = new Date( parseInt( tsr.t) );
+		ts.dat = new TextEncoder().encode( tsr.t );
+		document.getElementById( "tsT" ).value = tsr.t;
+		document.getElementById( "tsTime" ).value = ts.time;
+		document.getElementById( "tsTimeEnc" ).value = ts.dat;
+		
+		ts.sig = b64toi8array( tsr.s );
+		document.getElementById( "tsS" ).value = tsr.s;
+		document.getElementById( "tsSig" ).value = ts.sig;
+
+		const keyData = b64toi8array( tsr.k );
+		document.getElementById( "tsK" ).value = tsr.k;
+		document.getElementById( "tsKeyData" ).value = keyData;
+		importAt = new Date().getTime();
+		window.crypto.subtle.importKey(
+			"spki", 
+			keyData, 
+			{ name : "RSASSA-PKCS1-v1_5", hash : "SHA-256" }, 
+			true,
+			[ "verify" ]
+			).then( k => {
+				ts.key = k;
+				document.getElementById( "tsKey" ).value = debugKey( ts.key );
+				document.getElementById( "impms" ).innerHTML = ( new Date().getTime() - importAt ) + "ms";
+				verifySignedTimestamp();
+				});
+				
+			
+	}
+}
+
+function verifySignedTimestamp () {
+	verifyAt = new Date().getTime();
+	window.crypto.subtle.verify(
+		{ name : "RSASSA-PKCS1-v1_5" }, 
+		ts.key, 
+		ts.sig, 
+		ts.dat
+		).then( r => {
+			const sp = document.getElementById( "tsValid" );
+			sp.innerHTML = "Verified";
+			sp.style.color = "green";
+			document.getElementById( "verifyms" ).innerHTML = ( new Date().getTime() - verifyAt ) + "ms";
+		}).catch( r => {
+			const sp = document.getElementById( "tsValid" );
+			sp.innerHTML = "FAILED";
+			sp.style.color = "red";
+			document.getElementById( "verifyms" ).innerHTML = ( new Date().getTime() - verifyAt ) + "ms";
+		});
+}
+
+window.addEventListener( "load", () => {
+	getSignedTimestamp();
+});
+
+function hideKids ( evt ) {
+	const n = evt.target.nextElementSibling;
+	n.style.display = n.style.display == "" ? "none" : "";
+}
+</script>
+<style>
+body {
+	font-family: sans-serif;
+	font-size: 0.9em;
+}
+
+h2 {
+	cursor: pointer;
+}
+
+.millis {
+	font-size: 0.8em;
+	color: #777;
+}
+</style>
+</head>
+<body>
+
+	<h1>TEST : TimeBasedEncrypter (TBE)</h1>
+	<ul>
+		<li>Allows Tester to:
+			<ul>
+				<li>Fetch a signed timestamp from the server</li>
+				<li>Verify it</li>
+				<li>Fabricate an object</li>
+				<li>Request the server to escrow the object to some point in the future</li>
+				<li>Request the key and decrypt the object</li>
+			</ul>
+		</li>
+		<li>Fails if something fails: <span id="imp">not implemented</span></li>
+	</ul>
+	<div>
+		<h2 onclick="hideKids(event);">Fetch Signed Timestamp from Server</h2>
+		<div Xstyle="display: none">
+			<button id="fetchbtn" onclick="getSignedTimestamp();">Fetching</button> <progress id="fetchpb"></progress> <span id="fetchms" class="millis"></span>
+			<div>Signed Timestamp: <input id="tsr"/><br/>
+			t : <input id="tsT"/> &rArr; <input id="tsTimeEnc"/> &rArr; <input id="tsTime"/><br/>
+			s : <input id="tsS"/> &rArr; <input id="tsSig"/><br/>
+			k : <input id="tsK"/> &rArr; <input id="tsKeyData"/> &rArr; <input id="tsKey"/> <span id="impms" class="millis"></span><br/>
+			<span id="tsValid"></span> <span id="verifyms" class="millis"></span>
+			</div>
+		</div>
+	</div>
+	<hr />
+	<div>
+		<h2 onclick="hideKids(event);">Request Escrow</h2>
+		<div>Not yet implemented
+		</div>
+	</div>
+	<hr />
+
+	<div>
+		<h2 onclick="hideKids(event);">Request Key</h2>
+		<div>Not yet implemented
+		</div>
+	</div>
+	<hr />
+
+
+
+
+
+</body>
+</html>
