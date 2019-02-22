@@ -1,5 +1,5 @@
 /**
- * 
+ *
  */
 package tofer17.ags;
 
@@ -15,9 +15,9 @@ import org.slf4j.LoggerFactory;
 
 class RootAppTest {
 
-	@SuppressWarnings( "unused" )
+	@SuppressWarnings ( "unused" )
 	private static final Logger logger = LoggerFactory.getLogger( RootAppTest.class );
-	
+
 	@BeforeAll
 	static void setUpBeforeClass () throws Exception {
 	}
@@ -36,19 +36,25 @@ class RootAppTest {
 
 	@Test
 	void testRootApp () {
-		if ( "1".equals( "2" ) ) fail( "Not yet implemented" );
+		if ( "1".equals( "2" ) ) {
+			fail( "Not yet implemented" );
+		}
 		logger.trace( "Success" );
 	}
 
 	@Test
 	void testDoGetHttpServletRequestHttpServletResponse () {
-		if ( "1".equals( "2" ) ) fail( "Not yet implemented" );
+		if ( "1".equals( "2" ) ) {
+			fail( "Not yet implemented" );
+		}
 		logger.trace( "Success" );
 	}
 
 	@Test
 	void testDoPostHttpServletRequestHttpServletResponse () {
-		if ( "1".equals( "2" ) ) fail( "Not yet implemented" );
+		if ( "1".equals( "2" ) ) {
+			fail( "Not yet implemented" );
+		}
 		logger.trace( "Success" );
 	}
 
