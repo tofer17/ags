@@ -12,6 +12,7 @@ import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.security.SecureRandom;
 import java.security.Signature;
 import java.security.SignatureException;
 import java.security.spec.InvalidKeySpecException;
@@ -19,7 +20,20 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.RSAKeyGenParameterSpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
+import java.util.Date;
+import java.util.concurrent.AbstractExecutorService;
 
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.KeyGenerator;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.PBEKeySpec;
+import javax.crypto.spec.PBEParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 import javax.servlet.ServletConfig;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -162,6 +176,120 @@ public class TimeBasedEncrypter extends HttpServlet {
 			.append( "}" );
 	}
 
+	private CharSequence getKeyFor ( long t ) {
+		try {
+			final SecretKey key = genKey( t );
+			return "{\"k\":\"" + Base64.getEncoder().encodeToString( key.getEncoded() ) + "\"}";
+		} catch ( NoSuchAlgorithmException e ) {
+			e.printStackTrace();
+		} catch ( InvalidKeySpecException e ) {
+			e.printStackTrace();
+		}
+
+		return "{\"e\":\"error\"}";
+	}
+
+	private void test ( long t, String o ) {
+		try {
+			// xform "o" to "oo" as such {"ts":{JSON-TS},"o":"..."}
+			final String oo = new StringBuilder( o.length() + 200 ).append( "{\"t\":" ).append( t )
+				.append( ",\"o\":\"" ).append( o ).append( "\"," ).append( "\"ts\":" ).append( getTimestampJSON() )
+				.append( "}" ).toString();
+
+			logger.info( "oo='{}'", oo );
+
+			// encrypt "t" to "et" using private key
+			// Cipher cipher = Cipher.getInstance( "AES/GCM/NoPadding" );
+			Cipher cipher = Cipher.getInstance( "RSA/ECB/PKCS1Padding" );
+			cipher.init( Cipher.ENCRYPT_MODE, keyPair.getPrivate() );
+			final byte[] et = cipher.doFinal( ( t + "" ).getBytes() );
+			logger.info( "{}", et );
+
+// this needs to be an AES-GCM key
+
+			// use "et" to create new key "etk"
+			// final PKCS8EncodedKeySpec priKeySpec = new PKCS8EncodedKeySpec( et );
+			// final KeyFactory keyFactory = KeyFactory.getInstance( "RSA" );
+			// final PrivateKey etk = keyFactory.generatePrivate( priKeySpec );
+			final SecretKeySpec etk = new SecretKeySpec( et, "AES" );
+			// final KeyFactory skFactory = KeyFactory.getInstance( "AES" );
+			// final PrivateKey etk = skFactory.generatePrivate( skSpec );// generateSecret(
+			// skSpec );
+
+			logger.info( "pk=>{}", etk.getEncoded() );
+
+			// encrypt "oo" to "eoo" using "etk"
+			cipher = Cipher.getInstance( "AES/GCM/NoPadding" );
+			// final IvParameterSpec iv = new IvParameterSpec( "1234123412341234".getBytes(
+			// "UTF-8" ) );
+			// cipher.init( Cipher.ENCRYPT_MODE, etk, iv );
+// -> !!!!
+			cipher.init( Cipher.ENCRYPT_MODE, etk );
+
+			final byte[] eoo = cipher.doFinal( oo.getBytes() );
+			logger.info( "eoo='{}'", eoo );
+
+			// xform "eoo" to "eooj" as such {"t":"1234","c":"base64"}
+
+		} catch ( Throwable ex ) {
+			ex.printStackTrace();
+		}
+	}
+
+	private SecretKey genKey ( long t ) throws NoSuchAlgorithmException, InvalidKeySpecException {
+
+		// FIXME: This is clearly a bad idea...
+		final char[] pw = ( t + "-" + serialVersionUID ).toCharArray();
+
+		final PBEKeySpec spec = new PBEKeySpec( pw );
+
+		final SecretKeyFactory factory = SecretKeyFactory.getInstance( "PBEWithHmacSHA256AndAES_256" );
+
+		final SecretKey key = factory.generateSecret( spec );
+
+		return key;
+	}
+
+	private CharSequence embargo ( long t, String d ) {
+
+		try {
+			final SecretKey key = genKey( t );
+
+			final byte[] salt = new byte[ 50 ];
+
+			new SecureRandom().nextBytes( salt );
+
+			final int iterations = 1717;
+
+			final Cipher cipher = Cipher.getInstance( "PBEWithHmacSHA256AndAES_256" );
+
+			final PBEParameterSpec params = new PBEParameterSpec( salt, iterations );
+
+			cipher.init( Cipher.ENCRYPT_MODE, key, params );
+
+			final byte[] buf = cipher.doFinal( d.getBytes() );
+
+			return "{\"c\":\"" + Base64.getEncoder().encodeToString( buf ) + "\"}";
+
+		} catch ( NoSuchAlgorithmException e ) {
+			e.printStackTrace();
+		} catch ( InvalidKeySpecException e ) {
+			e.printStackTrace();
+		} catch ( NoSuchPaddingException e ) {
+			e.printStackTrace();
+		} catch ( InvalidKeyException e ) {
+			e.printStackTrace();
+		} catch ( InvalidAlgorithmParameterException e ) {
+			e.printStackTrace();
+		} catch ( IllegalBlockSizeException e ) {
+			e.printStackTrace();
+		} catch ( BadPaddingException e ) {
+			e.printStackTrace();
+		}
+
+		return "{\"e\":\"error\"}";
+	}
+
 	public void init ( ServletConfig config ) throws ServletException {
 		keyPair = loadOrGenerateKeyPair( new File( System.getProperty( "tofer17.ags.tbe.publicKey" ) ),
 			new File( System.getProperty( "tofer17.ags.tbe.privateKey" ) ) );
@@ -186,9 +314,33 @@ public class TimeBasedEncrypter extends HttpServlet {
 
 	protected void doGet ( HttpServletRequest request, HttpServletResponse response )
 		throws ServletException, IOException {
-		// response.getWriter().append( "Served at: " ).append( request.getContextPath()
-		// );
-		response.getWriter().append( getTimestampJSON() );
+
+		final String t = request.getParameter( "t" );
+
+		test( System.currentTimeMillis(), "Hello world!" );
+
+		if ( t == null || t.length() < 1 ) {
+			response.getWriter().append( getTimestampJSON() );
+			return;
+		}
+
+		logger.info( "Got request for '{}'", t );
+		final long d = Long.parseLong( t );
+		final long now = System.currentTimeMillis();
+		CharSequence s;
+		logger.info( "d={} now={} ?={}", d, now, ( d < now ) );
+		if ( d < now ) {
+			s = getKeyFor( d );
+		} else {
+			String o = request.getParameter( "o" );
+			if ( o == null ) {
+				o = getTimestampJSON().toString();
+			}
+			s = embargo( d, o );
+		}
+
+		response.getWriter().append( s );
+
 	}
 
 	protected void doPost ( HttpServletRequest request, HttpServletResponse response )

@@ -100,6 +100,25 @@ function verifySignedTimestamp () {
 		});
 }
 
+function setTime ( t ) {
+	document.getElementById( "tim" ).value = t;
+}
+
+function requestEscrow () {
+	let req = new XMLHttpRequest();
+	req.open( "POST", "tbe");
+	req.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+	req.onload = recieveEscrowResponse;
+	req.send( "t=" + document.getElementById( "tim" ).value );
+}
+
+function recieveEscrowResponse () {
+	if ( this.readyState === XMLHttpRequest.DONE && this.status === 200 ) {
+		document.getElementById( "req" ).value = this.response;
+	console.log( this );
+	}
+}
+
 window.addEventListener( "load", () => {
 	getSignedTimestamp();
 });
@@ -160,7 +179,21 @@ h2 {
 	<hr />
 	<div>
 		<h2 onclick="hideKids(event);">Request Escrow</h2>
-		<div>Not yet implemented</div>
+		<div>
+			Data:
+			<textarea id="dat">Hello World</textarea>
+			<br /> Time: <input id="tim" value="1550863501025" />
+			<button onclick="setTime(new Date().getTime() + 10000);">Now
+				+ 10s</button>
+			<button onclick="setTime(new Date().getTime() + 30000);">Now
+				+ 30s</button>
+			<button onclick="setTime(new Date().getTime() + 60000);">Now
+				+ 60s</button>
+			<br />
+			<button id="reqEsc" onclick="requestEscrow();">Request</button>
+			<br />
+			<textarea id="req"></textarea>
+		</div>
 	</div>
 	<hr />
 	<div>
