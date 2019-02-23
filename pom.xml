@@ -9,6 +9,8 @@
 	<name>A.G.S.</name>
 	<description>Adversarial Gaming System</description>
 	<properties>
+		<maven.compiler.source>1.8</maven.compiler.source>
+		<maven.compiler.target>1.8</maven.compiler.target>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<jetty.version>9.4.9.v20180320</jetty.version>
 		<javax.servlet.version>3.1.0</javax.servlet.version>

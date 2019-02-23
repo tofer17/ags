@@ -1,9 +1,13 @@
 package tofer17.ags;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.security.GeneralSecurityException;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.KeyFactory;
@@ -20,17 +24,15 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.RSAKeyGenParameterSpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
-import java.util.Date;
-import java.util.concurrent.AbstractExecutorService;
+import java.util.Properties;
+import java.util.Base64.Encoder;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.KeyGenerator;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
-import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.PBEParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -78,8 +80,15 @@ public class TimeBasedEncrypter extends HttpServlet {
 
 	private static final long serialVersionUID = 6444279358615606979L;
 
-	@SuppressWarnings ( "unused" )
 	private static final Logger logger = LoggerFactory.getLogger( TimeBasedEncrypter.class );
+
+	private static final Encoder B64Encoder = Base64.getEncoder();
+
+	private String signedTimestampAlgo = null;
+
+	private String signedTimestampFormat = null;
+
+	private String signedTimestampError = null;
 
 	private KeyPair keyPair = null;
 
@@ -89,7 +98,166 @@ public class TimeBasedEncrypter extends HttpServlet {
 		super();
 	}
 
-	private static final KeyPair loadOrGenerateKeyPair ( File publicKeyFile, File privateKeyFile ) {
+	private static final String EncodeToB64 ( byte[] bytes ) {
+		return B64Encoder.encodeToString( bytes );
+	}
+
+	private static Properties DEFAULT_PROPERTIES;
+	static {
+		final Properties p = new Properties();
+		p.setProperty( "tofer17.ags.tbe.signed.timestamp.algo", "SHA256withRSA" );
+		p.setProperty( "tofer17.ags.tbe.signed.timestamp.format", "{\"t\":%1$s,\"s\":\"%2$s\",\"k\":\"%3$s\"}" );
+		p.setProperty( "tofer17.ags.tbe.signed.timestamp.error", "{\"error\":-1}" );
+		// Although a neat idea-- not happening.
+		// p.setProperty( "tofer17.ags.tbe.key.algo", "RSA" );
+		// p.setProperty( "tofer17.ags.tbe.key.size", "2048" );
+		DEFAULT_PROPERTIES = new Properties( p );
+	}
+
+	private static final KeyPair importBase64KeyPair ( String algo, String publicKeyBase64, String privateKeyBase64 )
+		throws GeneralSecurityException {
+
+		final byte[] encodedPublicKey = Base64.getDecoder().decode( publicKeyBase64 );
+		final byte[] encodedPrivateKey = Base64.getDecoder().decode( privateKeyBase64 );
+
+		final X509EncodedKeySpec pubKeySpec = new X509EncodedKeySpec( encodedPublicKey );
+		final PKCS8EncodedKeySpec priKeySpec = new PKCS8EncodedKeySpec( encodedPrivateKey );
+
+		final KeyFactory keyFactory = KeyFactory.getInstance( algo );
+
+		final PublicKey publicKey = keyFactory.generatePublic( pubKeySpec );
+		final PrivateKey privateKey = keyFactory.generatePrivate( priKeySpec );
+
+		return new KeyPair( publicKey, privateKey );
+	}
+
+	private static final KeyPair generateNewKeyPair ( String algo, int size ) throws GeneralSecurityException {
+
+		if ( "RSA".equals( algo ) ) {
+			final RSAKeyGenParameterSpec params = new RSAKeyGenParameterSpec( size, RSAKeyGenParameterSpec.F0 );
+
+			final KeyPairGenerator keyGen = KeyPairGenerator.getInstance( algo );
+
+			keyGen.initialize( params );
+
+			return keyGen.generateKeyPair();
+		}
+
+		throw new NoSuchAlgorithmException( "Cannot work with '" + algo + "'" );
+	}
+
+	private final void loadConfig () {
+		final Properties props = new Properties( DEFAULT_PROPERTIES );
+
+		String propsFilename = System.getProperty( "tofer17.ags.tbe.properties.file" );
+
+		if ( propsFilename == null || propsFilename.length() < 1 ) {
+			propsFilename = "./run/etc/tbe.properties";
+		}
+
+		boolean saveNeeded = false;
+
+		FileInputStream fin = null;
+		try {
+			fin = new FileInputStream( propsFilename );
+			props.load( fin );
+		} catch ( IOException e ) {
+			// e.printStackTrace();
+			logger.warn( "Properties file '{}' could not load.", propsFilename );
+			saveNeeded = true;
+		} finally {
+			try {
+				if ( fin != null ) {
+					fin.close();
+				}
+			} catch ( IOException e ) {
+				// e.printStackTrace();
+				logger.warn( "...error closing properties file '{}'...", propsFilename );
+			} finally {
+				fin = null;
+			}
+		}
+
+		signedTimestampAlgo = props.getProperty( "tofer17.ags.tbe.signed.timestamp.algo" );
+		signedTimestampFormat = props.getProperty( "tofer17.ags.tbe.signed.timestamp.format" );
+		signedTimestampError = props.getProperty( "tofer17.ags.tbe.signed.timestamp.error" );
+
+		final String publicKeyBase64 = props.getProperty( "tofer17.ags.tbe.public.key" );
+		final String privateKeyBase64 = props.getProperty( "tofer17.ags.tbe.private.key" );
+
+		if ( publicKeyBase64 == null || privateKeyBase64 == null || publicKeyBase64.length() < 1
+			|| privateKeyBase64.length() < 1 ) {
+			// Something's not right...
+			try {
+				keyPair = generateNewKeyPair( props.getProperty( "tofer17.ags.tbe.key.algo", "RSA" ),
+					Integer.parseInt( props.getProperty( "tofer17.ags.tbe.key.size", "2048" ) ) );
+				saveNeeded = true;
+
+			} catch ( NumberFormatException | GeneralSecurityException e ) {
+				e.printStackTrace();
+				keyPair = null;
+			}
+		} else {
+			// Load 'em in!
+			try {
+				keyPair = importBase64KeyPair( props.getProperty( "tofer17.ags.tbe.key.algo", "RSA" ), publicKeyBase64,
+					privateKeyBase64 );
+				logger.info( "Imported key pair from properties: '{}'", keyPair );
+			} catch ( GeneralSecurityException e ) {
+				e.printStackTrace();
+				keyPair = null;
+			}
+		}
+
+		if ( saveNeeded && keyPair != null ) {
+			saveConfig();
+		} else if ( saveNeeded ) {
+			logger.warn(
+				"Configuration needs to be saved, however, we cannot since we could neither load nore generate our key-pair" );
+		}
+
+	}
+
+	private final void saveConfig () {
+		final Properties props = new Properties( DEFAULT_PROPERTIES );
+
+		props.setProperty( "tofer17.ags.tbe.signed.timestamp.algo", signedTimestampAlgo );
+		props.setProperty( "tofer17.ags.tbe.signed.timestamp.format", signedTimestampFormat );
+		props.setProperty( "tofer17.ags.tbe.signed.timestamp.error", signedTimestampError );
+
+		if ( keyPair != null ) {
+			props.setProperty( "tofer17.ags.tbe.public.key", EncodeToB64( keyPair.getPublic().getEncoded() ) );
+			props.setProperty( "tofer17.ags.tbe.private.key", EncodeToB64( keyPair.getPrivate().getEncoded() ) );
+		}
+
+		String propsFilename = System.getProperty( "tofer17.ags.tbe.properties.file" );
+
+		if ( propsFilename == null || propsFilename.length() < 1 ) {
+			propsFilename = "./run/etc/tbe.properties";
+		}
+
+		FileOutputStream fout = null;
+		try {
+			fout = new FileOutputStream( propsFilename );
+			props.store( fout, "" );
+		} catch ( IOException e ) {
+			// e.printStackTrace();
+			logger.warn( "Could not save properties to '{}'", propsFilename );
+		} finally {
+			try {
+				if ( fout != null ) {
+					fout.close();
+				}
+			} catch ( IOException e ) {
+				// e.printStackTrace();
+				logger.warn( "...could not close properties file '{}'...", propsFilename );
+			} finally {
+				fout = null;
+			}
+		}
+	}
+
+	private static final KeyPair xloadOrGenerateKeyPair ( File publicKeyFile, File privateKeyFile ) {
 
 		// Check if the files exist
 		if ( !publicKeyFile.canRead() || !privateKeyFile.canRead() ) {
@@ -147,35 +315,6 @@ public class TimeBasedEncrypter extends HttpServlet {
 		return null;
 	}
 
-	/**
-	 * t = time, s = signature, k = key {"t":"...", "s":"...", "k":"..."}
-	 *
-	 * @return
-	 */
-	private CharSequence getTimestampJSON () {
-
-		byte[] signature = new byte[ 0 ];
-
-		final String time = "" + System.currentTimeMillis();
-
-		try {
-			final Signature sig = Signature.getInstance( "SHA256withRSA" );
-			sig.initSign( keyPair.getPrivate() );
-			sig.update( time.getBytes() );
-			signature = sig.sign();
-		} catch ( NoSuchAlgorithmException e ) {
-			e.printStackTrace();
-		} catch ( InvalidKeyException e ) {
-			e.printStackTrace();
-		} catch ( SignatureException e ) {
-			e.printStackTrace();
-		}
-
-		return new StringBuffer( 771 ).append( "{\"t\":\"" ).append( time ).append( "\",\"s\":\"" )
-			.append( Base64.getEncoder().encodeToString( signature ) ).append( "\"," ).append( pubKeyExport )
-			.append( "}" );
-	}
-
 	private CharSequence getKeyFor ( long t ) {
 		try {
 			final SecretKey key = genKey( t );
@@ -215,7 +354,7 @@ public class TimeBasedEncrypter extends HttpServlet {
 
 			// xform "o" to "oo" as such {"ts":{JSON-TS},"o":"..."}
 			final String oo = new StringBuilder( o.length() + 200 ).append( "{\"t\":" ).append( t )
-				.append( ",\"o\":\"" ).append( o ).append( "\"," ).append( "\"ts\":" ).append( getTimestampJSON() )
+				.append( ",\"o\":\"" ).append( o ).append( "\"," ).append( "\"ts\":" ).append( SignedTimestampJSON() )
 				.append( "}" ).toString();
 
 			logger.info( "oo='{}'", oo );
@@ -302,15 +441,22 @@ public class TimeBasedEncrypter extends HttpServlet {
 	}
 
 	public void init ( ServletConfig config ) throws ServletException {
-		keyPair = loadOrGenerateKeyPair( new File( System.getProperty( "tofer17.ags.tbe.publicKey" ) ),
-			new File( System.getProperty( "tofer17.ags.tbe.privateKey" ) ) );
+		// keyPair = loadOrGenerateKeyPair( new File( System.getProperty(
+		// "tofer17.ags.tbe.publicKey" ) ),
+		// new File( System.getProperty( "tofer17.ags.tbe.privateKey" ) ) );
+
+		// log( "Hi!" );
+		super.init( config );
+		loadConfig();
 
 		if ( keyPair == null ) {
 			logger.error( "FATAL: could not load or generate keys!" );
 		}
 
-		pubKeyExport = new StringBuffer( 400 ).append( "\"k\":\"" )
-			.append( Base64.getEncoder().encodeToString( keyPair.getPublic().getEncoded() ) ).append( "\"" ).toString();
+		// pubKeyExport = new StringBuffer( 400 ).append( "\"k\":\"" )
+		// .append( Base64.getEncoder().encodeToString( keyPair.getPublic().getEncoded()
+		// ) ).append( "\"" ).toString();
+		// pubKeyExport = EncodeToB64( keyPair.getPublic().getEncoded() );
 
 		if ( "1".equals( "2" ) ) { // for debugging, adds r:[...] as part of the pubKeyExp
 			byte[] b = keyPair.getPublic().getEncoded();
@@ -321,17 +467,25 @@ public class TimeBasedEncrypter extends HttpServlet {
 			sb.append( "]," ).append( pubKeyExport );
 			pubKeyExport = sb.toString();
 		}
+
+		logger.info( "TBE initialized {}", SignedTimestampJSON() );
+	}
+
+	@Override
+	public void destroy () {
+		saveConfig();
+		super.destroy();
 	}
 
 	protected void doGet ( HttpServletRequest request, HttpServletResponse response )
 		throws ServletException, IOException {
-
+		log( "Hi!" );
 		final String t = request.getParameter( "t" );
 
 		test( System.currentTimeMillis(), "Hello world!" );
 
 		if ( t == null || t.length() < 1 ) {
-			response.getWriter().append( getTimestampJSON() );
+			response.getWriter().append( SignedTimestampJSON() );
 			return;
 		}
 
@@ -345,18 +499,38 @@ public class TimeBasedEncrypter extends HttpServlet {
 		} else {
 			String o = request.getParameter( "o" );
 			if ( o == null ) {
-				o = getTimestampJSON().toString();
+				o = SignedTimestampJSON().toString();
 			}
 			s = embargo( d, o );
 		}
 
 		response.getWriter().append( s );
-
 	}
 
 	protected void doPost ( HttpServletRequest request, HttpServletResponse response )
 		throws ServletException, IOException {
 		doGet( request, response );
+	}
+
+	private final CharSequence SignedTimestampJSON () {
+
+		final String timestamp = "" + System.currentTimeMillis();
+
+		if ( pubKeyExport == null ) {
+			pubKeyExport = EncodeToB64( keyPair.getPublic().getEncoded() );
+		}
+
+		try {
+			final Signature sig = Signature.getInstance( signedTimestampAlgo );
+			sig.initSign( keyPair.getPrivate() );
+			sig.update( timestamp.getBytes( StandardCharsets.UTF_8 ) );
+			final byte[] sigBytes = sig.sign();
+			final String sigB64 = EncodeToB64( sigBytes );
+			return String.format( signedTimestampFormat, timestamp, sigB64, pubKeyExport );
+		} catch ( InvalidKeyException | SignatureException | NoSuchAlgorithmException e ) {
+			e.printStackTrace();
+			return signedTimestampError;
+		}
 	}
 
 }
