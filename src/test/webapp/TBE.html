@@ -49,8 +49,11 @@ function recieveSignedTimestamp ( e ) {
 		
 		ts = {};
 		
+		ts.mode = tsr.m;
+		
 		ts.time = new Date( parseInt( tsr.t) );
-		ts.dat = new TextEncoder().encode( tsr.t );
+		// The data to verify is: "<t>:<m>"
+		ts.dat = new TextEncoder().encode( tsr.t + ":" + ts.mode );
 		document.getElementById( "tsT" ).value = tsr.t;
 		document.getElementById( "tsTime" ).value = ts.time;
 		document.getElementById( "tsTimeEnc" ).value = ts.dat;
@@ -87,10 +90,10 @@ function verifySignedTimestamp () {
 		ts.key, 
 		ts.sig, 
 		ts.dat
-		).then( r => {
+		).then( r => { console.log(r);
 			const sp = document.getElementById( "tsValid" );
-			sp.innerHTML = "Verified";
-			sp.style.color = "green";
+			sp.innerHTML = r ? "Verified" : "FAILED";
+			sp.style.color = r ? "green" : "red";
 			document.getElementById( "verifyms" ).innerHTML = ( new Date().getTime() - verifyAt ) + "ms";
 		}).catch( r => {
 			const sp = document.getElementById( "tsValid" );
@@ -102,6 +105,7 @@ function verifySignedTimestamp () {
 
 function setTime ( t ) {
 	document.getElementById( "tim" ).value = t;
+	getAboveTime();
 }
 
 function requestEscrow () {
@@ -109,14 +113,79 @@ function requestEscrow () {
 	req.open( "POST", "tbe");
 	req.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
 	req.onload = recieveEscrowResponse;
-	req.send( "t=" + document.getElementById( "tim" ).value );
+	req.send( 
+		"t=" + document.getElementById( "tim" ).value +
+		"&o=" + document.getElementById( "dat" ).value
+	);
 }
+
+var emb;
 
 function recieveEscrowResponse () {
 	if ( this.readyState === XMLHttpRequest.DONE && this.status === 200 ) {
 		document.getElementById( "req" ).value = this.response;
-	console.log( this );
+		emb = JSON.parse( this.response );
 	}
+}
+
+function getAboveTime () {
+	document.getElementById( "k4tim" ).value = document.getElementById( "tim" ).value;
+}
+
+function requestKey () {
+	let req = new XMLHttpRequest();
+	req.open( "GET", "tbe?"+"t=" + document.getElementById( "k4tim" ).value);
+	req.onload = recieveKeyResponse;
+	req.send();
+}
+
+var embKeyJSON, embKey;
+
+function recieveKeyResponse () {
+	if ( this.readyState === XMLHttpRequest.DONE && this.status === 200 ) {
+		document.getElementById( "k4req" ).value = this.response;
+		let k4res = JSON.parse(this.response);
+		console.log( this, k4res, );
+		embKeyJSON = JSON.parse( this.response );
+		if ( embKeyJSON.error ) {
+			console.error("ERROR!");
+			return;
+		}
+
+		// Import the key:
+		window.crypto.subtle.importKey(
+			"raw",
+			b64toi8array( embKeyJSON.k ),
+			{ name : "AES-GCM" },
+			true,
+			["decrypt"]
+			).then( r=> {
+				console.log(r);
+				embKey = r;
+				decrypt();
+			});
+			
+	}
+}
+
+function decrypt () {
+	let iv = b64toi8array( emb.iv );
+	let algo = {
+		name : "AES-GCM",
+		iv : iv
+	};
+
+	let data = b64toi8array( emb.ct );
+	
+	window.crypto.subtle.decrypt(
+		algo,
+		embKey,
+		data
+	).then( r => {
+		let d = new TextDecoder().decode( r );
+		let res = JSON.parse( d );
+		console.log( res );
+	});
 }
 
 window.addEventListener( "load", () => {
@@ -183,6 +252,8 @@ h2 {
 			Data:
 			<textarea id="dat">Hello World</textarea>
 			<br /> Time: <input id="tim" value="1550863501025" />
+			<button onclick="setTime(new Date().getTime() + 1000);">Now
+				+ 1s</button>
 			<button onclick="setTime(new Date().getTime() + 10000);">Now
 				+ 10s</button>
 			<button onclick="setTime(new Date().getTime() + 30000);">Now
@@ -198,7 +269,12 @@ h2 {
 	<hr />
 	<div>
 		<h2 onclick="hideKids(event);">Request Key</h2>
-		<div>Not yet implemented</div>
+		<div>
+			Time: <input id="k4tim" value="1550863501025"/> <button onclick="getAboveTime();">from above</button>
+			<br/><button onclick="requestKey();">Request Key</button>
+			<br/><textarea id="k4req"></textarea>
+
+		</div>
 	</div>
 	<hr />
 </body>
