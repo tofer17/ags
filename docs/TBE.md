@@ -49,6 +49,26 @@ It is. Sorry. Bottom line is that Alice and Bob **must** agree to note **time** 
 
 Intriguing thought. It could work such that 51% would need to be in cahoots. Thus, TBE makes this work in even-partied games.
 
+### Advanced Gameplay Example
+
+> This example shows both situations; it will be helpful to understand how Mental Poker is used for randomization, the Playbook concept, and how it's passed around.
+
+Lets envision a game of Boggle between Alice, Bob and Chris (of course). In boggle, the play-grid is a 4 x 4 set if 6 sided dice => 4 x 4 game pieces, of which each has a 1-in-6 face showing.
+
+Using Mental Poker, we create 16 dice, and then for each we randomly select (also using MP) a showing-face. That makes for 96 x 3 = 288 MP passes but we get'er all done.
+
+Alice, Bob and Chris each contact the server and embargo their keys (each has 96 keys) until "board reveal time" which is at precisely 7:00 pm in the future-- and all of this is transacted in the playbook.
+
+Alice contacts the server at 6:59 pm and requests the key-- but she's denied!
+
+Eve has taken interest-- but everything's encrypted and she can't get any more information than any other, nor can she tamper.
+
+Right just after 7:00 pm, Alice, Bob and Chris each request **the** key for 7:00 pm-- and only one key, once. They can use that single key and decrypt **all** keys and thus decrypt all 16 pieces (and 6 faces per dice). Now the clock is ticking.
+
+Each types in words and when they are satisfied, each one: compiles their list of words into a collection object, then posts that up to the server to be embargoed (at the present, "now", time), and publishes the result into the playbook.
+
+They can prove that their list of words was completed on time (or not if they were late). No one can have started before 7:00 pm; neither Eve nor anyone cannot have tampered; and everyone's results are firmly established as complete by the given time they posted them to the server (if not, the server would issue a denial)... if they were late then they were late.
+
 ## Some Archi-Technical Details
 
 To generate a timestamp based key, the server encrypts the timestamp with its Private Key such that the cipher-text produced is always the same. It uses that cipher-text (of the timestamp) to create a (symmetric) key which it uses to encrypt the data-to-embargo with. There are additional technical details about this (esp. truncation) for discussion later...
