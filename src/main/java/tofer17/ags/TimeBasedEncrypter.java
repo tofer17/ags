@@ -191,6 +191,28 @@ public class TimeBasedEncrypter extends HttpServlet {
 
 	private void test ( long t, String o ) {
 		try {
+			logger.info( "-------------" );
+			// encrypt "t" to "et" using private key
+			// Cipher cipher = Cipher.getInstance( "AES/GCM/NoPadding" );
+// TODO: "ECB"??
+			Cipher cipher = Cipher.getInstance( "RSA/ECB/PKCS1Padding" );
+			cipher.init( Cipher.ENCRYPT_MODE, keyPair.getPrivate() );
+			final byte[] et = cipher.doFinal( ( t + "" ).getBytes() );
+			logger.info( "et=>({}) '{}'", et.length, et );
+
+			// use "et" to create new key "etk"
+			// final PKCS8EncodedKeySpec priKeySpec = new PKCS8EncodedKeySpec( et );
+			// final KeyFactory keyFactory = KeyFactory.getInstance( "RSA" );
+			// final PrivateKey etk = keyFactory.generatePrivate( priKeySpec );
+			final byte[] trunc = new byte[ 32 ]; // <- "32" can be parameterized
+			System.arraycopy( et, 0, trunc, 0, Math.min( trunc.length, et.length ) );
+			final SecretKeySpec etk = new SecretKeySpec( trunc, "AES" );
+			// final KeyFactory skFactory = KeyFactory.getInstance( "AES" );
+			// final PrivateKey etk = skFactory.generatePrivate( skSpec );// generateSecret(
+			// skSpec );
+
+			logger.info( "etk=>({}) {}", etk.getEncoded().length, etk.getEncoded() );
+
 			// xform "o" to "oo" as such {"ts":{JSON-TS},"o":"..."}
 			final String oo = new StringBuilder( o.length() + 200 ).append( "{\"t\":" ).append( t )
 				.append( ",\"o\":\"" ).append( o ).append( "\"," ).append( "\"ts\":" ).append( getTimestampJSON() )
@@ -198,38 +220,27 @@ public class TimeBasedEncrypter extends HttpServlet {
 
 			logger.info( "oo='{}'", oo );
 
-			// encrypt "t" to "et" using private key
-			// Cipher cipher = Cipher.getInstance( "AES/GCM/NoPadding" );
-			Cipher cipher = Cipher.getInstance( "RSA/ECB/PKCS1Padding" );
-			cipher.init( Cipher.ENCRYPT_MODE, keyPair.getPrivate() );
-			final byte[] et = cipher.doFinal( ( t + "" ).getBytes() );
-			logger.info( "{}", et );
-
-// this needs to be an AES-GCM key
-
-			// use "et" to create new key "etk"
-			// final PKCS8EncodedKeySpec priKeySpec = new PKCS8EncodedKeySpec( et );
-			// final KeyFactory keyFactory = KeyFactory.getInstance( "RSA" );
-			// final PrivateKey etk = keyFactory.generatePrivate( priKeySpec );
-			final SecretKeySpec etk = new SecretKeySpec( et, "AES" );
-			// final KeyFactory skFactory = KeyFactory.getInstance( "AES" );
-			// final PrivateKey etk = skFactory.generatePrivate( skSpec );// generateSecret(
-			// skSpec );
-
-			logger.info( "pk=>{}", etk.getEncoded() );
-
 			// encrypt "oo" to "eoo" using "etk"
 			cipher = Cipher.getInstance( "AES/GCM/NoPadding" );
+			// cipher = Cipher.getInstance( "AES/CBC/PKCS5PADDING" );
 			// final IvParameterSpec iv = new IvParameterSpec( "1234123412341234".getBytes(
 			// "UTF-8" ) );
 			// cipher.init( Cipher.ENCRYPT_MODE, etk, iv );
-// -> !!!!
+// https://stackoverflow.com/questions/15554296/simple-java-aes-encrypt-decrypt-example
+
 			cipher.init( Cipher.ENCRYPT_MODE, etk );
 
 			final byte[] eoo = cipher.doFinal( oo.getBytes() );
 			logger.info( "eoo='{}'", eoo );
 
-			// xform "eoo" to "eooj" as such {"t":"1234","c":"base64"}
+// TODO: Prob gon'a need to ship the IV too
+			logger.info( "IV={}", cipher.getIV() );
+
+			// xform "eoo" to "eooj" as such {"t":1234,"c":"base64"}
+			final String eooj = new StringBuilder().append( "{\"t\":" ).append( t ).append( ",\"c\":\"" )
+				.append( Base64.getEncoder().encodeToString( eoo ) ).append( "\"}" ).toString();
+
+			logger.info( "eooj=>({}) '{}'", eooj.length(), eooj );
 
 		} catch ( Throwable ex ) {
 			ex.printStackTrace();
