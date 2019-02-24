@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="ISO-8859-1">
+<title>TEST : Comms</title>
+<script src="Comms.js"></script>
+<style>
+body {
+	font-family: sans-serif;
+	font-size: 0.9em;
+}
+
+h2 {
+	cursor: pointer;
+}
+
+.millis {
+	font-size: 0.8em;
+	color: #777;
+}
+
+.recip {
+	color: blue;
+	background: #ccc;
+}
+
+.msgbody {
+	color: green;
+}
+
+.message {
+	border: 1px solid red;
+}
+</style>
+</head>
+<body>
+	<h1>TEST : Comms</h1>
+	<ul>
+		<li>Allows Tester to:
+			<ul>
+				<li>Hook up to the server</li>
+				<li>Transmit a message</li>
+				<li>Recieve a message</li>
+			</ul>
+		</li>
+		<li>Fails if something fails: <span id="imp">not
+				implemented</span></li>
+	</ul>
+	<div>
+		<h2 onclick="hideKids(event);">Hook up</h2>
+		<div Xstyle="display: none">
+			Id: <input id="wid" /><br />
+			<button id="hkup" onclick="hookup();">Hook Up</button>
+			<span id="hkupstatus"></span>
+		</div>
+	</div>
+	<hr />
+	<div>
+		<h2 onclick="hideKids(event);">Messages</h2>
+		<div>
+			<textarea id="sendmsg"></textarea>
+			<button onclick="sendMsg();">Send</button>
+			<div class="xxx">
+				Messages:
+				<div id="recemsg"></div>
+			</div>
+		</div>
+	</div>
+	<hr />
+</body>
+</html>
