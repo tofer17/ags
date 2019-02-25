@@ -70,6 +70,8 @@ function conn () {
 				abort = false;
 			}
 			break;
+		default :
+			console.error( "???", this );
 
 	}
 }
@@ -97,18 +99,21 @@ function connected () {
 }
 
 function sendMsg () {
-	let el = document.getElementById( "sendmsg" );
+	let s = "f=" + wid;
+	let tolist = document.getElementById( "tolist" ).value.split(",");
+	console.log(tolist);
+	for ( let i = 0; i < tolist.length; i++ ) {
+		s += "&t=" + tolist[i];
+	}
+	s += "&m=" + document.getElementById( "sendmsg" ).value;
+	console.log(s);
 	let post = new XMLHttpRequest();
 	post.open( "POST", "com" );
 	post.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
-	//post.onload = connected;
-	post.send(
-		"r=" + wid +
-		"&m=" + el.value
-	);
+	post.send( s );
 }
 
-/** ************************************************** */
+/**************************************************** */
 window.addEventListener( "load", () => {
 	setup();
 });

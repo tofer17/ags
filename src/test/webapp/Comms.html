@@ -58,9 +58,10 @@ h2 {
 	<div>
 		<h2 onclick="hideKids(event);">Messages</h2>
 		<div>
-			<textarea id="sendmsg"></textarea>
+			<textarea id="sendmsg">Hello</textarea><br/>
+			To: <input id="tolist" value="1,2,3"/>
 			<button onclick="sendMsg();">Send</button>
-			<div class="xxx">
+			<div>
 				Messages:
 				<div id="recemsg"></div>
 			</div>
